@@ -1,6 +1,6 @@
 #!/bin/bash
 
-aws iam list-roles | jq '.Roles[] | ({RoleName: .RoleName, Description: .Description})' > IAM_Roles.txt
+aws iam list-roles | jq '.Roles[] | ({RoleName: .RoleName, Description: .Description, AssumePolicy: .AssumeRolePolicyDocument})' > IAM_Roles.txt
 aws iam list-users | jq '.Users[] | ({RoleName: .UserName})' > IAM_Users.txt
 aws iam list-saml-providers > IAM_SAML.txt
 aws iam list-open-id-connect-providers > IAM_OIDC.txt
