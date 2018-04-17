@@ -5,6 +5,7 @@ aws iam list-users | jq '.Users[] | ({RoleName: .UserName})' > IAM_Users.txt
 aws iam list-saml-providers > IAM_SAML.txt
 aws iam list-open-id-connect-providers > IAM_OIDC.txt
 aws organizations describe-organization > OrgStatus.txt
+aws s3api list-buckets --output text --query 'Owner' > Acct_Identifier.txt
 
 for region in `aws ec2 describe-regions --output text | cut -f3`
 do
