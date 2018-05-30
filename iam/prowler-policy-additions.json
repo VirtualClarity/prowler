@@ -5,11 +5,16 @@
       "Action": [
         "acm:describecertificate",
         "acm:listcertificates",
-        "cloudwatchlogs:describeloggroups",
-        "cloudwatchlogs:describemetricfilters",
         "es:describeelasticsearchdomainconfig",
+        "logs:DescribeLogGroups",
+        "logs:DescribeMetricFilters",
         "ses:getidentityverificationattributes",
-        "sns:listsubscriptionsbytopic"
+        "sns:listsubscriptionsbytopic",
+        "guardduty:ListDetectors",
+        "trustedadvisor:Describe*",
+        "cloudtrail:GetEventSelectors",
+        "apigateway:GET",
+        "support:*"
       ],
       "Effect": "Allow",
       "Resource": "*"
