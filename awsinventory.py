@@ -57,7 +57,7 @@ def lambda_handler(event, context):
     filepath ='AWS_Resources_' + date_fmt + '.csv'
     csv_file = open(filepath,'w+')
 
-    print('Scanning Global Ojects')
+    print('Scanning Global Ojects : IAM')
 
     # IAM connection beginning
     iam = boto3.client('iam', region_name="us-east-1")
@@ -68,43 +68,45 @@ def lambda_handler(event, context):
 
     # boto3 library IAM API
     # http://boto3.readthedocs.io/en/latest/reference/services/iam.html
-    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-    csv_file.write("%s,%s\n"%('IAM','REGION : Global'))
-    csv_file.write("%s,%s\n" % ('User','Policies'))
-    csv_file.flush()
     users = iam.list_users()['Users']
-    for user in users:
-        user_name = user['UserName']
-        policies = ''
-        user_policies = iam.list_user_policies(UserName=user_name)["PolicyNames"]
-        for user_policy in user_policies:
-            if(len(policies) > 0):
-                policies += ";"
-            policies += user_policy
-        attached_user_policies = iam.list_attached_user_policies(UserName=user_name)["AttachedPolicies"]
-        for attached_user_policy in attached_user_policies:
-            if(len(policies) > 0):
-                policies += ";"
-            policies += attached_user_policy['PolicyName']
-        csv_file.write("%s,%s\n" % (user_name, policies))
+    if len(users) > 0:
+        csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+        csv_file.write("%s,%s\n"%('IAM','REGION : Global'))
+        csv_file.write("%s,%s\n" % ('User','Policies'))
         csv_file.flush()
+        for user in users:
+            user_name = user['UserName']
+            policies = ''
+            user_policies = iam.list_user_policies(UserName=user_name)["PolicyNames"]
+            for user_policy in user_policies:
+                if(len(policies) > 0):
+                    policies += ";"
+                policies += user_policy
+            attached_user_policies = iam.list_attached_user_policies(UserName=user_name)["AttachedPolicies"]
+            for attached_user_policy in attached_user_policies:
+                if(len(policies) > 0):
+                    policies += ";"
+                policies += attached_user_policy['PolicyName']
+            csv_file.write("%s,%s\n" % (user_name, policies))
+            csv_file.flush()
     roles = iam.list_roles()
-    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-    csv_file.write("%s,%s\n"%('IAM ROLES','REGION : Global'))
-    csv_file.write("%s\n" % ('RoleName'))
-    csv_file.flush()
-    # pprint.pprint(roles)
-    for role in roles.get('Roles'):
-        csv_file.write("%s\n" % (role['RoleName']))
+    if len(roles) > 0:
+        csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+        csv_file.write("%s,%s\n"%('IAM ROLES','REGION : Global'))
+        csv_file.write("%s\n" % ('RoleName'))
+        csv_file.flush()
+        for role in roles.get('Roles'):
+            csv_file.write("%s\n" % (role['RoleName']))
 
     # S3 Objects
+    print('Scanning Global Ojects : S3')
     s3i = boto3.client('s3')
     #http://boto3.readthedocs.io/en/latest/reference/services/s3.html#client
     listbuckets = s3i.list_buckets()
     if len(listbuckets) > 0:
         csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
         csv_file.write("%s,%s\n"%('S3 Buckets','REGION : Global'))
-        csv_file.write("%s,%s,%s\n" % ('Name','Public','Has Website'))
+        csv_file.write("%s,%s,%s\n" % ('Name','Public','HostingWebsite'))
         csv_file.flush()
         for bucket_dictionary in listbuckets['Buckets']:
             bucketname = bucket_dictionary['Name']
@@ -116,18 +118,37 @@ def lambda_handler(event, context):
             except ClientError as ce:
                 if 'NoSuchWebsiteConfiguration' in ce.args[0]:
                     has_website = 'no'
-            bucket_acl_response = s3i.get_bucket_acl(Bucket=bucket_dictionary['Name'])
-            for grant in bucket_acl_response['Grants']:
-                for (k, v) in grant.items():
-                    if k == 'Permission' and any(permission in v for permission in ['READ', 'WRITE']):
-                        for (grantee_attrib_k, grantee_attrib_v) in grant['Grantee'].items():
-                            if 'URI' in grantee_attrib_k and grant['Grantee']['URI'] == 'http://acs.amazonaws.com/groups/global/AllUsers':
-                                is_public = 'yes'
-                            else:
-                                is_public = 'no'
-                    else:
-                        is_public = 'no'
+            try:
+                bucket_acl_response = s3i.get_bucket_acl(Bucket=bucket_dictionary['Name'])
+                for grant in bucket_acl_response['Grants']:
+                    for (k, v) in grant.items():
+                        if k == 'Permission' and any(permission in v for permission in ['READ', 'WRITE']):
+                            for (grantee_attrib_k, grantee_attrib_v) in grant['Grantee'].items():
+                                if 'URI' in grantee_attrib_k and grant['Grantee']['URI'] == 'http://acs.amazonaws.com/groups/global/AllUsers':
+                                    is_public = 'yes'
+                                else:
+                                    is_public = 'no'
+                        else:
+                            is_public = 'no'
+            except ClientError as ce:
+                is_public = 'no'
             csv_file.write("%s,%s,%s\n" % (bucketname,is_public,has_website))
+            csv_file.flush()
+
+    # Route53 resources
+    print('Scanning Global Ojects : Route53')
+    r53i = boto3.client('route53')
+    hosted_zones = r53i.list_hosted_zones()['HostedZones']
+    if len(hosted_zones) > 0:
+        csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+        csv_file.write("%s,%s\n"%('Route 53','REGION : Global'))
+        csv_file.write("%s,%s,%s\n" % ('ZoneName','PrivateZone','RecordCount'))
+        csv_file.flush()
+        for zone in hosted_zones:
+            zone_name = zone['Name']
+            zone_private = zone['Config']['PrivateZone']
+            zone_recordcount = zone['ResourceRecordSetCount']
+            csv_file.write("%s,%s,%s\n" % (zone_name, zone_private, zone_recordcount))
             csv_file.flush()
 
     # boto3 library ec2 API describe region page
@@ -135,7 +156,7 @@ def lambda_handler(event, context):
     regions = ec.describe_regions().get('Regions',[] )
     for region in regions:
         reg=region['RegionName']
-        regname='REGION :' + reg
+        regname='REGION : ' + reg
         print('Scanning Region :', reg)
         # EC2 connection beginning
         ec2con = boto3.client('ec2',region_name=reg)
