@@ -1,0 +1,2 @@
+# pip install -r awsinventoryrequirements.txt
+boto3
