@@ -3,7 +3,7 @@ import collections
 from datetime import datetime
 from datetime import timedelta
 import csv
-from time import gmtime, strftime
+from time import gmtime, strftime, time
 import os
 import logging
 from botocore.exceptions import ClientError
@@ -53,6 +53,7 @@ def lambda_handler(event, context):
     # get to the current date
     date_fmt = strftime("%Y_%m_%d-%H%M%S", gmtime())
     print('Audit Started', date_fmt)
+    start_time = time()
     # Give your file path
     filepath ='AWS_Resources_' + date_fmt + '.csv'
     csv_file = open(filepath,'w+')
@@ -64,7 +65,7 @@ def lambda_handler(event, context):
 
     thedate_fmt = strftime("%d-%m-%Y %H:%M:%S", gmtime())
     csv_file.write("%s %s\n" % ('AWS Inventory for account',ownerId))
-    csv_file.write("%s %s\n" % ('Date and time -',thedate_fmt))
+    csv_file.write("%s %s\n" % ('Audit started -',thedate_fmt))
 
     # boto3 library IAM API
     # http://boto3.readthedocs.io/en/latest/reference/services/iam.html
@@ -478,7 +479,7 @@ def lambda_handler(event, context):
 
         # Directory Service
         if reg == 'eu-west-3': # TODO: Waiting for Boto3 to update the error handling for DS.
-            print ("INFO: Directory Services are not available in",reg)
+            print ("    INFO: Directory Service is not available in",reg)
         else:
             dsi = boto3.client('ds',region_name=reg)
             dss = dsi.describe_directories()['DirectoryDescriptions']
@@ -512,7 +513,7 @@ def lambda_handler(event, context):
                     csv_file.write("%s,%s\n" % (projectid,projectarn))
                     csv_file.flush()
         except exceptions.EndpointConnectionError:
-            print ("INFO: CodeStar is not available in",reg)
+            print ("    INFO: CodeStar is not available in",reg)
 
         # Code Commit
         cci = boto3.client('codecommit',region_name=reg)
@@ -556,18 +557,51 @@ def lambda_handler(event, context):
                     csv_file.write("%s,%s\n" % (dpname,dpid))
                     csv_file.flush()
         except exceptions.EndpointConnectionError:
-            print ("INFO: Data Pipeline is not available in",reg)
+            print ("    INFO: Data Pipeline is not available in",reg)
 
         # Cognito
+        try:
+            cognitoi = boto3.client('cognito-identity',region_name=reg)
+            cognitos = cognitoi.list_identity_pools(MaxResults=10)['IdentityPools']
+            if len(cognitos) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Cognito',regname))
+                csv_file.write("%s,%s\n" % ('Name','ID'))
+                csv_file.flush()
+                for cog in cognitos:
+                    cogname = dp['name']
+                    cogid = dp['id']
+                    csv_file.write("%s,%s\n" % (cogname,cogid))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: Cognito is not available in",reg)
 
-        # CloudHSM
-        
         # KMS  
+        try:
+            kmsi = boto3.client('kms',region_name=reg)
+            kmss = kmsi.list_keys()['Keys']
+            if len(kmss) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('KMS',regname))
+                csv_file.write("%s,%s\n" % ('ARN','ID'))
+                csv_file.flush()
+                for key in kmss:
+                    keyarn = key['KeyArn']
+                    keyid = key['KeyId']
+                    csv_file.write("%s,%s\n" % (keyarn,keyid))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: KMS is not available in",reg)
 
+    running_time = start_time - time()
+    enddate_fmt = strftime("%Y_%m_%d-%H%M%S", gmtime())
+    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+    csv_file.write("%s %s\n"%('Audit complete -', enddate_fmt))
+    csv_file.write("%s %s %s\n"%('Total running time', running_time, 'seconds'))
     date_fmt = strftime("%Y_%m_%d", gmtime())
     filepath ='/tmp/AWS_Resources_' + date_fmt + '.csv'
-    enddate_fmt = strftime("%Y_%m_%d-%H%M%S", gmtime())
-    print('Audit Complete', enddate_fmt)
+    print('Audit complete', enddate_fmt)
+    print('Total running time',running_time)
 
 if __name__ == '__main__':
     lambda_handler(None, None)
