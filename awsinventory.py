@@ -475,22 +475,25 @@ def lambda_handler(event, context):
                 partnername = directconnect['partnerName']
                 csv_file.write("%s,%s,%s,%s,%s,%s\n" % (name,status,region,location,bandwidth,partnername))
                 csv_file.flush()
-                
+
         # Directory Service
 
         # Codestar
-        codestari = boto3.client('codestar',region_name=reg)
-        csprojects = codestari.list_projects()['projects']
-        if len(csprojects) > 0:
-            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-            csv_file.write("%s,%s\n"%('CodeStar',regname))
-            csv_file.write("%s,%s\n" % ('ProjectID','ProjectARN'))
-            csv_file.flush()
-            for project in csprojects:
-                projectid = project['projectId']
-                projectarn = project['projectArn']
-                csv_file.write("%s,%s\n" % (projectid,projectarn))
+        try:
+            codestari = boto3.client('codestar',region_name=reg)
+            csprojects = codestari.list_projects()['projects']
+            if len(csprojects) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('CodeStar',regname))
+                csv_file.write("%s,%s\n" % ('ProjectID','ProjectARN'))
                 csv_file.flush()
+                for project in csprojects:
+                    projectid = project['projectId']
+                    projectarn = project['projectArn']
+                    csv_file.write("%s,%s\n" % (projectid,projectarn))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("INFO: CodeStar is not available in region",reg)
 
         # Code Commit
 
