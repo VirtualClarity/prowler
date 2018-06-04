@@ -459,7 +459,23 @@ def lambda_handler(event, context):
             csv_file.flush()
 
         # Direct Connect
-
+        directconnecti = boto3.client('directconnect',region_name=reg)
+        directconnects = directconnecti.describe_connections()['connections']
+        if len(directconnects) > 0:
+            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+            csv_file.write("%s,%s\n"%('DirectConnect',regname))
+            csv_file.write("%s,%s\n" % ('Name','Status','Region','Location','Bandwidth','PartnerName'))
+            csv_file.flush()
+            for directconnect in directconnects:
+                name = directconnect['connectionName']
+                status = directconnect['connectionState']
+                region = directconnect['region']
+                location = directconnect['location']
+                bandwidth = directconnect['bandwidth']
+                partnername = directconnect['partnerName']
+                csv_file.write("%s,%s,%s,%s,%s,%s\n" % (name,status,region,location,bandwidth,partnername))
+                csv_file.flush()
+                
         # Directory Service
 
         # Codestar
@@ -473,7 +489,7 @@ def lambda_handler(event, context):
             for project in csprojects:
                 projectid = project['projectId']
                 projectarn = project['projectArn']
-                csv_file.write("%s,%s\n" % (projectid, projectarn))
+                csv_file.write("%s,%s\n" % (projectid,projectarn))
                 csv_file.flush()
 
         # Code Commit
@@ -487,7 +503,6 @@ def lambda_handler(event, context):
         # CloudHSM        
 
     date_fmt = strftime("%Y_%m_%d", gmtime())
-    # Give your file path
     filepath ='/tmp/AWS_Resources_' + date_fmt + '.csv'
     enddate_fmt = strftime("%Y_%m_%d-%H%M%S", gmtime())
     print('Audit Complete', enddate_fmt)
