@@ -601,8 +601,8 @@ def lambda_handler(event, context):
     csv_file.write("%s %s %s\n"%('Total running time', running_time, 'seconds'))
     date_fmt = strftime("%Y_%m_%d", gmtime())
     filepath ='/tmp/AWS_Resources_' + date_fmt + '.csv'
-    print('Audit complete', enddate_fmt)
-    print('Total running time',running_time)
+    print('Audit complete',enddate_fmt)
+    print('Total running time',running_time,'seconds')
 
 if __name__ == '__main__':
     lambda_handler(None, None)
