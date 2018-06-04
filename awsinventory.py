@@ -464,7 +464,7 @@ def lambda_handler(event, context):
         if len(directconnects) > 0:
             csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
             csv_file.write("%s,%s\n"%('DirectConnect',regname))
-            csv_file.write("%s,%s\n" % ('Name','Status','Region','Location','Bandwidth','PartnerName'))
+            csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Region','Location','Bandwidth','PartnerName'))
             csv_file.flush()
             for directconnect in directconnects:
                 name = directconnect['connectionName']
@@ -477,6 +477,22 @@ def lambda_handler(event, context):
                 csv_file.flush()
 
         # Directory Service
+        dsi = boto3.client('ds',region_name=reg)
+        dss = dsi.describe_directories()['DirectoryDescriptions']
+        if len(dss) > 0:
+            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+            csv_file.write("%s,%s\n"%('Directory Services',regname))
+            csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Type','Edition','LaunchTime','Description'))
+            csv_file.flush()
+            for ds in dss:
+                dsname = ds['Name']
+                dsstatus = ds['Stage']
+                dstype = ds['Type']
+                dsedition = ds['Edition']
+                dslaunchtime = ds['LaunchTime']
+                dsdescription = ds['Description']
+                csv_file.write("%s,%s,%s,%s,%s,%s\n" % (dsname,dsstatus,dstype,dsedition,dslaunchtime,dsdescription))
+                csv_file.flush()
 
         # Codestar
         try:
@@ -493,7 +509,7 @@ def lambda_handler(event, context):
                     csv_file.write("%s,%s\n" % (projectid,projectarn))
                     csv_file.flush()
         except exceptions.EndpointConnectionError:
-            print ("INFO: CodeStar is not available in region",reg)
+            print ("INFO: CodeStar is not available in",reg)
 
         # Code Commit
 
