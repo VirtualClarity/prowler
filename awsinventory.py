@@ -477,23 +477,26 @@ def lambda_handler(event, context):
                 csv_file.flush()
 
         # Directory Service
-        dsi = boto3.client('ds',region_name=reg)
-        dss = dsi.describe_directories()['DirectoryDescriptions']
-        if len(dss) > 0:
-            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-            csv_file.write("%s,%s\n"%('Directory Services',regname))
-            csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Type','Edition','LaunchTime','Description'))
-            csv_file.flush()
-            for ds in dss:
-                dsname = ds['Name']
-                dsstatus = ds['Stage']
-                dstype = ds['Type']
-                dsedition = ds['Edition']
-                dslaunchtime = ds['LaunchTime']
-                dsdescription = ds['Description']
-                csv_file.write("%s,%s,%s,%s,%s,%s\n" % (dsname,dsstatus,dstype,dsedition,dslaunchtime,dsdescription))
+        if reg == 'eu-west-3': # TODO: Waiting for Boto3 to update the error handling for DS.
+            print ("INFO: Directory Services are not available in",reg)
+        else:
+            dsi = boto3.client('ds',region_name=reg)
+            dss = dsi.describe_directories()['DirectoryDescriptions']
+            if len(dss) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Directory Services',regname))
+                csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Type','Edition','LaunchTime','Description'))
                 csv_file.flush()
-
+                for ds in dss:
+                    dsname = ds['Name']
+                    dsstatus = ds['Stage']
+                    dstype = ds['Type']
+                    dsedition = ds['Edition']
+                    dslaunchtime = ds['LaunchTime']
+                    dsdescription = ds['Description']
+                    csv_file.write("%s,%s,%s,%s,%s,%s\n" % (dsname,dsstatus,dstype,dsedition,dslaunchtime,dsdescription))
+                    csv_file.flush()
+        
         # Codestar
         try:
             codestari = boto3.client('codestar',region_name=reg)
@@ -512,14 +515,54 @@ def lambda_handler(event, context):
             print ("INFO: CodeStar is not available in",reg)
 
         # Code Commit
+        cci = boto3.client('codecommit',region_name=reg)
+        ccs = cci.list_repositories()['repositories']
+        if len(dss) > 0:
+            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+            csv_file.write("%s,%s\n"%('Code Commit',regname))
+            csv_file.write("%s,%s\n" % ('Name','RepoID'))
+            csv_file.flush()
+            for cs in css:
+                csname = cs['Name']
+                csrepoid = cs['Stage']
+                csv_file.write("%s,%s\n" % (csname,csrepoid))
+                csv_file.flush()
 
         # Kinesis
+        kinei = boto3.client('kinesis',region_name=reg)
+        kines = kinei.list_streams()['StreamNames']
+        if len(kines) > 0:
+            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+            csv_file.write("%s,%s\n"%('Kinesis',regname))
+            csv_file.write("%s\n" % ('StreamName'))
+            csv_file.flush()
+            for i in range(len(kines)):
+                kinename = kines[i]
+                csv_file.write("%s\n" % (kinename))
+                csv_file.flush()
 
         # Data Pipeline
+        try:
+            dpipei = boto3.client('datapipeline',region_name=reg)
+            dpipes = dpipei.list_pipelines()['pipelineIdList']
+            if len(dpipes) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Data Pipeline',regname))
+                csv_file.write("%s,%s\n" % ('Name','ID'))
+                csv_file.flush()
+                for dp in dpipes:
+                    dpname = dp['name']
+                    dpid = dp['id']
+                    csv_file.write("%s,%s\n" % (dpname,dpid))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("INFO: Data Pipeline is not available in",reg)
 
         # Cognito
 
-        # CloudHSM        
+        # CloudHSM
+        
+        # KMS  
 
     date_fmt = strftime("%Y_%m_%d", gmtime())
     filepath ='/tmp/AWS_Resources_' + date_fmt + '.csv'
