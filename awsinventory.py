@@ -593,7 +593,8 @@ def lambda_handler(event, context):
         except exceptions.EndpointConnectionError:
             print ("    INFO: KMS is not available in",reg)
 
-    running_time = start_time - time()
+    end_time = time()
+    running_time = str(int(end_time - start_time))
     enddate_fmt = strftime("%Y_%m_%d-%H%M%S", gmtime())
     csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
     csv_file.write("%s %s\n"%('Audit complete -', enddate_fmt))
