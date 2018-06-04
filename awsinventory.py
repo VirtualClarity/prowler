@@ -355,6 +355,22 @@ def lambda_handler(event, context):
                 csv_file.write("%s,%s,%s,%s,%s\n"%(vpcid,instancetenancy,state,cidr,tags))
                 csv_file.flush()
 
+        # VPC Peering
+        vpcpeers = ec2con.describe_vpc_peering_connections()['VpcPeeringConnections']
+        if len(vpcpeers) > 0:
+            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+            csv_file.write("%s,%s\n"%('VPC Peering',regname))
+            csv_file.write("%s,%s,%s,%s,%s\n" % ('SourceOwner','SourceVPCID','DestinationOwner','DestinationVPCID','Status'))
+            csv_file.flush()
+            for peer in vpcpeers:
+                sowner = peer['AccepterVpcInfo']['OwnerId']
+                svpcid = peer['AccepterVpcInfo']['VpcId']
+                downer = peer['RequesterVpcInfo']['OwnerId']
+                dvpcid = peer['RequesterVpcInfo']['VpcId']
+                status = peer['Status']['Code']
+                csv_file.write("%s,%s,%s,%s,%s\n" % (sowner,svpcid,downer,dvpcid,status))
+                csv_file.flush()
+
         # Autoscaling
         # http://boto3.readthedocs.io/en/latest/reference/services/autoscaling.html#AutoScaling.Client.describe_auto_scaling_groups
         autoscale = boto3.client('autoscaling',region_name=reg)
@@ -442,7 +458,33 @@ def lambda_handler(event, context):
             csv_file.write("%s,%s,%s,%s\n" % (LoadBalancerName,DNSName,CanonicalHostedZoneName,CanonicalHostedZoneNameID))
             csv_file.flush()
 
-        
+        # Direct Connect
+
+        # Directory Service
+
+        # Codestar
+        codestari = boto3.client('codestar',region_name=reg)
+        csprojects = codestari.list_projects()['projects']
+        if len(csprojects) > 0:
+            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+            csv_file.write("%s,%s\n"%('CodeStar',regname))
+            csv_file.write("%s,%s\n" % ('ProjectID','ProjectARN'))
+            csv_file.flush()
+            for project in csprojects:
+                projectid = project['projectId']
+                projectarn = project['projectArn']
+                csv_file.write("%s,%s\n" % (projectid, projectarn))
+                csv_file.flush()
+
+        # Code Commit
+
+        # Kinesis
+
+        # Data Pipeline
+
+        # Cognito
+
+        # CloudHSM        
 
     date_fmt = strftime("%Y_%m_%d", gmtime())
     # Give your file path
