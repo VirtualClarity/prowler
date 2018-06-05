@@ -593,6 +593,27 @@ def lambda_handler(event, context):
         except exceptions.EndpointConnectionError:
             print ("    INFO: KMS is not available in",reg)
 
+        # Redshift
+        try:
+            redshifti = boto3.client('redshift',region_name=reg)
+            redshifts = redshifti.describe_clusters()['Clusters']
+            if len(redshifts) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Redshift',regname))
+                csv_file.write("%s,%s\n" % ('ID','Type','Status','DBName','NodeCount','Public'))
+                csv_file.flush()
+                for rs in redshifts:
+                    rsid = rs['ClusterIdentifier']
+                    rstype = rs['NodeType']
+                    rsstatus = rs['ClusterStatus']
+                    rsdbname = rs['DBName']
+                    rsnodecount = rs['NumberOfNodes']
+                    rspublic = rs['PubliclyAccessible']
+                    csv_file.write("%s,%s,%s,%s,%s,%s\n" % (rsid,rstype,rsstatus,rsdbname,rsnodecount,rspublic))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: Redshift is not available in",reg)
+
     end_time = time()
     running_time = str(int(end_time - start_time))
     enddate_fmt = strftime("%Y_%m_%d-%H%M%S", gmtime())
