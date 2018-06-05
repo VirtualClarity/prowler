@@ -600,7 +600,7 @@ def lambda_handler(event, context):
             if len(redshifts) > 0:
                 csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
                 csv_file.write("%s,%s\n"%('Redshift',regname))
-                csv_file.write("%s,%s\n" % ('ID','Type','Status','DBName','NodeCount','Public'))
+                csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('ID','Type','Status','DBName','NodeCount','Public'))
                 csv_file.flush()
                 for rs in redshifts:
                     rsid = rs['ClusterIdentifier']
@@ -613,6 +613,90 @@ def lambda_handler(event, context):
                     csv_file.flush()
         except exceptions.EndpointConnectionError:
             print ("    INFO: Redshift is not available in",reg)
+
+        # SNS
+        try:
+            snsi = boto3.client('sns',region_name=reg)
+            snss = snsi.list_topics()['Topics']
+            if len(snss) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('SNS',regname))
+                csv_file.write("%s\n" % ('TopicARN'))
+                csv_file.flush()
+                for sns in snss:
+                    snsarn = sns['TopicArn']
+                    csv_file.write("%s\n" % (snsarn))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: SNS is not available in",reg)
+
+        # SQS
+        try:
+            sqsi = boto3.client('sqs',region_name=reg)
+            sqss = sqsi.list_queues()
+            if len(sqss) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('SQS',regname))
+                csv_file.write("%s\n" % ('SQSInUse'))
+                csv_file.write("%s\n" % ('True'))
+                csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: SQS is not available in",reg)
+
+        # Workspaces
+        try:
+            workspacesi = boto3.client('workspaces',region_name=reg)
+            workspacess = workspacesi.describe_workspaces()['Workspaces']
+            if len(workspacess) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Workspaces',regname))
+                csv_file.write("%s,%s\n" % ('WorkspaceId','State'))
+                csv_file.flush()
+                for workspace in workspacess:
+                    workspaceid = workspace['WorkspaceId']
+                    workspacestate = workspace['State']
+                    csv_file.write("%s,%s\n" % (workspaceid,workspacestate))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: Workspaces is not available in",reg)
+
+        # Glue
+        try:
+            gluei = boto3.client('glue',region_name=reg)
+            glues = gluei.get_jobs()['Jobs']
+            if len(glues) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Glue',regname))
+                csv_file.write("%s,%s\n" % ('Name','Description'))
+                csv_file.flush()
+                for glue in glues:
+                    gluename = glue['Name']
+                    gluedesc = glue['Description']
+                    csv_file.write("%s,%s\n" % (workspaceid,gluetate))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: Glue is not available in",reg)
+
+        # Lambda
+        try:
+            lambdai = boto3.client('lambda',region_name=reg)
+            lambdas = lambdai.list_functions()['Functions']
+            if len(lambdas) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Lambda',regname))
+                csv_file.write("%s,%s,%s,%s,%s\n" % ('FunctionName','Runtime','CodeSize','Description','MemorySize'))
+                csv_file.flush()
+                for lamb in lambdas:
+                    lambfname = lamb['FunctionName']
+                    lambrtime = lamb['Runtime']
+                    lambcsize = lamb['CodeSize']
+                    lambdescr = lamb['Description']
+                    lambmsize = lamb['MemorySize']
+                    csv_file.write("%s,%s,%s,%s,%s\n" % (lambfname,lambrtime,lambcsize,lambdescr,lambmsize))
+                    csv_file.flush()
+        except exceptions.EndpointConnectionError:
+            print ("    INFO: Lambda is not available in",reg)
+
 
     end_time = time()
     running_time = str(int(end_time - start_time))
