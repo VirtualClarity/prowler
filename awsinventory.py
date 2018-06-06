@@ -569,8 +569,8 @@ def lambda_handler(event, context):
                 csv_file.write("%s,%s\n" % ('Name','ID'))
                 csv_file.flush()
                 for cog in cognitos:
-                    cogname = cog['name']
-                    cogid = cog['id']
+                    cogid = cog['IdentityPoolId']
+                    cogname = cog['IdentityPoolName']
                     csv_file.write("%s,%s\n" % (cogname,cogid))
                     csv_file.flush()
         except exceptions.EndpointConnectionError:
