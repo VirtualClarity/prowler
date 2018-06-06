@@ -4,11 +4,19 @@ from datetime import datetime
 from datetime import timedelta
 import csv
 from time import gmtime, strftime, time
+import sys
 import os
 import logging
 from botocore.exceptions import ClientError
 from botocore import exceptions
+from argparse import ArgumentParser
 
+parser = ArgumentParser()
+parser.add_argument("-o", "--orgid", dest="ORG_ID",help="Please provide the AWS Organization ID")
+if len(sys.argv)==1:
+    parser.print_help(sys.stderr)
+    sys.exit(1)
+args = parser.parse_args()
 # Set up logger. Feel free to change the logging format or add a FileHandler per your needs.
 # logformat = ('%(asctime)s %(levelname)s [%(name)s] %(message)s')
 # logging.basicConfig(level=logging.INFO, format=logformat)
@@ -31,22 +39,15 @@ except ClientError as e:
         exit(1)
 
 # Find current owner ID
-sts = boto3.client('sts')
-identity = sts.get_caller_identity()
 ownerId = identity['Account']
 
 # Environment Variables
 LIST_SNAPSHOTS_WITHIN_THE_LAST_N_DAYS="7"
+ORG_ID=args.ORG_ID
+PART_OF_ORG="false"
 
-# Constants
-MAIL_SUBJECT="AWS Inventory for " + ownerId
-MAIL_BODY=MAIL_SUBJECT + '\n'
-
-
-# EC2 connection beginning
+# EC2 connection beginning to obtain region list
 ec = boto3.client('ec2')
-# S3 connection beginning
-s3 = boto3.resource('s3')
 
 # lambda function beginning
 def lambda_handler(event, context):
@@ -57,6 +58,26 @@ def lambda_handler(event, context):
     # Give your file path
     filepath ='AWS_Resources_' + date_fmt + '.csv'
     csv_file = open(filepath,'w+')
+
+    # Check if the account is already in the AWS Organization
+    orgi = boto3.client('organizations')
+    orgs = orgi.describe_organization()['Organization']
+    if len(orgs) > 0:
+        csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+        csv_file.write("%s,%s\n"%('Organization','REGION : Global'))
+        csv_file.write("%s,%s\n" % ('OrgID','IsMainOrg'))
+        csv_file.flush()
+        orgid = orgs['Id']
+        if orgid == ORG_ID:
+            PART_OF_ORG="true"
+            csv_file.write("%s,%s\n" % (orgid,'true'))
+            csv_file.flush()
+        else:
+            PART_OF_ORG="false"
+            csv_file.write("%s,%s\n" % (orgid,'false'))
+            csv_file.flush()
+    else:
+        PART_OF_ORG="false"
 
     print('Scanning Global Ojects : IAM')
 
@@ -137,20 +158,23 @@ def lambda_handler(event, context):
             csv_file.flush()
 
     # Route53 resources
-    print('Scanning Global Ojects : Route53')
-    r53i = boto3.client('route53')
-    hosted_zones = r53i.list_hosted_zones()['HostedZones']
-    if len(hosted_zones) > 0:
-        csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-        csv_file.write("%s,%s\n"%('Route 53','REGION : Global'))
-        csv_file.write("%s,%s,%s\n" % ('ZoneName','PrivateZone','RecordCount'))
-        csv_file.flush()
-        for zone in hosted_zones:
-            zone_name = zone['Name']
-            zone_private = zone['Config']['PrivateZone']
-            zone_recordcount = zone['ResourceRecordSetCount']
-            csv_file.write("%s,%s,%s\n" % (zone_name, zone_private, zone_recordcount))
+    if PART_OF_ORG == "false":
+        print('Scanning Global Ojects : Route53')
+        r53i = boto3.client('route53')
+        hosted_zones = r53i.list_hosted_zones()['HostedZones']
+        if len(hosted_zones) > 0:
+            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+            csv_file.write("%s,%s\n"%('Route 53','REGION : Global'))
+            csv_file.write("%s,%s,%s\n" % ('ZoneName','PrivateZone','RecordCount'))
             csv_file.flush()
+            for zone in hosted_zones:
+                zone_name = zone['Name']
+                zone_private = zone['Config']['PrivateZone']
+                zone_recordcount = zone['ResourceRecordSetCount']
+                csv_file.write("%s,%s,%s\n" % (zone_name, zone_private, zone_recordcount))
+                csv_file.flush()
+    else:
+        print ("    INFO: Route 53 is blocked by ORG SCPs")
 
     # boto3 library ec2 API describe region page
     # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#EC2.Client.describe_regions
@@ -460,121 +484,141 @@ def lambda_handler(event, context):
             csv_file.flush()
 
         # Direct Connect
-        directconnecti = boto3.client('directconnect',region_name=reg)
-        directconnects = directconnecti.describe_connections()['connections']
-        if len(directconnects) > 0:
-            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-            csv_file.write("%s,%s\n"%('DirectConnect',regname))
-            csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Region','Location','Bandwidth','PartnerName'))
-            csv_file.flush()
-            for directconnect in directconnects:
-                name = directconnect['connectionName']
-                status = directconnect['connectionState']
-                region = directconnect['region']
-                location = directconnect['location']
-                bandwidth = directconnect['bandwidth']
-                partnername = directconnect['partnerName']
-                csv_file.write("%s,%s,%s,%s,%s,%s\n" % (name,status,region,location,bandwidth,partnername))
+        if PART_OF_ORG == "false":
+            directconnecti = boto3.client('directconnect',region_name=reg)
+            directconnects = directconnecti.describe_connections()['connections']
+            if len(directconnects) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('DirectConnect',regname))
+                csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Region','Location','Bandwidth','PartnerName'))
                 csv_file.flush()
+                for directconnect in directconnects:
+                    name = directconnect['connectionName']
+                    status = directconnect['connectionState']
+                    region = directconnect['region']
+                    location = directconnect['location']
+                    bandwidth = directconnect['bandwidth']
+                    partnername = directconnect['partnerName']
+                    csv_file.write("%s,%s,%s,%s,%s,%s\n" % (name,status,region,location,bandwidth,partnername))
+                    csv_file.flush()
+        else:
+            print ("    INFO: Direct Connect is blocked by ORG SCPs")
 
         # Directory Service
-        if reg == 'eu-west-3': # TODO: Waiting for Boto3 to update the error handling for DS.
-            print ("    INFO: Directory Service is not available in",reg)
-        else:
-            dsi = boto3.client('ds',region_name=reg)
-            dss = dsi.describe_directories()['DirectoryDescriptions']
-            if len(dss) > 0:
-                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-                csv_file.write("%s,%s\n"%('Directory Services',regname))
-                csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Type','Edition','LaunchTime','Description'))
-                csv_file.flush()
-                for ds in dss:
-                    dsname = ds['Name']
-                    dsstatus = ds['Stage']
-                    dstype = ds['Type']
-                    dsedition = ds['Edition']
-                    dslaunchtime = ds['LaunchTime']
-                    dsdescription = ds['Description']
-                    csv_file.write("%s,%s,%s,%s,%s,%s\n" % (dsname,dsstatus,dstype,dsedition,dslaunchtime,dsdescription))
+        if PART_OF_ORG == "false":
+            if reg == 'eu-west-3': # TODO: Waiting for Boto3 to update the error handling for DS.
+                print ("    INFO: Directory Service is not available in",reg)
+            else:
+                dsi = boto3.client('ds',region_name=reg)
+                dss = dsi.describe_directories()['DirectoryDescriptions']
+                if len(dss) > 0:
+                    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                    csv_file.write("%s,%s\n"%('Directory Services',regname))
+                    csv_file.write("%s,%s,%s,%s,%s,%s\n" % ('Name','Status','Type','Edition','LaunchTime','Description'))
                     csv_file.flush()
+                    for ds in dss:
+                        dsname = ds['Name']
+                        dsstatus = ds['Stage']
+                        dstype = ds['Type']
+                        dsedition = ds['Edition']
+                        dslaunchtime = ds['LaunchTime']
+                        dsdescription = ds['Description']
+                        csv_file.write("%s,%s,%s,%s,%s,%s\n" % (dsname,dsstatus,dstype,dsedition,dslaunchtime,dsdescription))
+                        csv_file.flush()
+        else:
+            print ("    INFO: Directory Service is blocked by ORG SCPs")
         
         # Codestar
-        try:
-            codestari = boto3.client('codestar',region_name=reg)
-            csprojects = codestari.list_projects()['projects']
-            if len(csprojects) > 0:
-                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-                csv_file.write("%s,%s\n"%('CodeStar',regname))
-                csv_file.write("%s,%s\n" % ('ProjectID','ProjectARN'))
-                csv_file.flush()
-                for project in csprojects:
-                    projectid = project['projectId']
-                    projectarn = project['projectArn']
-                    csv_file.write("%s,%s\n" % (projectid,projectarn))
+        if PART_OF_ORG == "false":
+            try:
+                codestari = boto3.client('codestar',region_name=reg)
+                csprojects = codestari.list_projects()['projects']
+                if len(csprojects) > 0:
+                    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                    csv_file.write("%s,%s\n"%('CodeStar',regname))
+                    csv_file.write("%s,%s\n" % ('ProjectID','ProjectARN'))
                     csv_file.flush()
-        except exceptions.EndpointConnectionError:
-            print ("    INFO: CodeStar is not available in",reg)
+                    for project in csprojects:
+                        projectid = project['projectId']
+                        projectarn = project['projectArn']
+                        csv_file.write("%s,%s\n" % (projectid,projectarn))
+                        csv_file.flush()
+            except exceptions.EndpointConnectionError:
+                print ("    INFO: CodeStar is not available in",reg)
+        else:
+            print ("    INFO: CodeStar is blocked by ORG SCPs")
 
         # Code Commit
-        cci = boto3.client('codecommit',region_name=reg)
-        ccs = cci.list_repositories()['repositories']
-        if len(dss) > 0:
-            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-            csv_file.write("%s,%s\n"%('Code Commit',regname))
-            csv_file.write("%s,%s\n" % ('Name','RepoID'))
-            csv_file.flush()
-            for cs in css:
-                csname = cs['Name']
-                csrepoid = cs['Stage']
-                csv_file.write("%s,%s\n" % (csname,csrepoid))
+        if PART_OF_ORG == "false":
+            cci = boto3.client('codecommit',region_name=reg)
+            ccs = cci.list_repositories()['repositories']
+            if len(dss) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Code Commit',regname))
+                csv_file.write("%s,%s\n" % ('Name','RepoID'))
                 csv_file.flush()
+                for cs in css:
+                    csname = cs['Name']
+                    csrepoid = cs['Stage']
+                    csv_file.write("%s,%s\n" % (csname,csrepoid))
+                    csv_file.flush()
+        else:
+            print ("    INFO: CodeCommit is blocked by ORG SCPs")
 
         # Kinesis
-        kinei = boto3.client('kinesis',region_name=reg)
-        kines = kinei.list_streams()['StreamNames']
-        if len(kines) > 0:
-            csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-            csv_file.write("%s,%s\n"%('Kinesis',regname))
-            csv_file.write("%s\n" % ('StreamName'))
-            csv_file.flush()
-            for i in range(len(kines)):
-                kinename = kines[i]
-                csv_file.write("%s\n" % (kinename))
+        if PART_OF_ORG == "false":
+            kinei = boto3.client('kinesis',region_name=reg)
+            kines = kinei.list_streams()['StreamNames']
+            if len(kines) > 0:
+                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                csv_file.write("%s,%s\n"%('Kinesis',regname))
+                csv_file.write("%s\n" % ('StreamName'))
                 csv_file.flush()
+                for i in range(len(kines)):
+                    kinename = kines[i]
+                    csv_file.write("%s\n" % (kinename))
+                    csv_file.flush()
+
 
         # Data Pipeline
-        try:
-            dpipei = boto3.client('datapipeline',region_name=reg)
-            dpipes = dpipei.list_pipelines()['pipelineIdList']
-            if len(dpipes) > 0:
-                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-                csv_file.write("%s,%s\n"%('Data Pipeline',regname))
-                csv_file.write("%s,%s\n" % ('Name','ID'))
-                csv_file.flush()
-                for dp in dpipes:
-                    dpname = dp['name']
-                    dpid = dp['id']
-                    csv_file.write("%s,%s\n" % (dpname,dpid))
+        if PART_OF_ORG == "false":
+            try:
+                dpipei = boto3.client('datapipeline',region_name=reg)
+                dpipes = dpipei.list_pipelines()['pipelineIdList']
+                if len(dpipes) > 0:
+                    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                    csv_file.write("%s,%s\n"%('Data Pipeline',regname))
+                    csv_file.write("%s,%s\n" % ('Name','ID'))
                     csv_file.flush()
-        except exceptions.EndpointConnectionError:
-            print ("    INFO: Data Pipeline is not available in",reg)
+                    for dp in dpipes:
+                        dpname = dp['name']
+                        dpid = dp['id']
+                        csv_file.write("%s,%s\n" % (dpname,dpid))
+                        csv_file.flush()
+            except exceptions.EndpointConnectionError:
+                print ("    INFO: Data Pipeline is not available in",reg)
+        else:
+            print ("    INFO: Data Pipeline is blocked by ORG SCPs")
 
         # Cognito
-        try:
-            cognitoi = boto3.client('cognito-identity',region_name=reg)
-            cognitos = cognitoi.list_identity_pools(MaxResults=10)['IdentityPools']
-            if len(cognitos) > 0:
-                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-                csv_file.write("%s,%s\n"%('Cognito',regname))
-                csv_file.write("%s,%s\n" % ('Name','ID'))
-                csv_file.flush()
-                for cog in cognitos:
-                    cogid = cog['IdentityPoolId']
-                    cogname = cog['IdentityPoolName']
-                    csv_file.write("%s,%s\n" % (cogname,cogid))
+        if PART_OF_ORG == "false":
+            try:
+                cognitoi = boto3.client('cognito-identity',region_name=reg)
+                cognitos = cognitoi.list_identity_pools(MaxResults=10)['IdentityPools']
+                if len(cognitos) > 0:
+                    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                    csv_file.write("%s,%s\n"%('Cognito',regname))
+                    csv_file.write("%s,%s\n" % ('Name','ID'))
                     csv_file.flush()
-        except exceptions.EndpointConnectionError:
-            print ("    INFO: Cognito is not available in",reg)
+                    for cog in cognitos:
+                        cogid = cog['IdentityPoolId']
+                        cogname = cog['IdentityPoolName']
+                        csv_file.write("%s,%s\n" % (cogname,cogid))
+                        csv_file.flush()
+            except exceptions.EndpointConnectionError:
+                print ("    INFO: Cognito is not available in",reg)
+        else:
+            print ("    INFO: Cognito is blocked by ORG SCPs")
 
         # KMS  
         try:
@@ -661,21 +705,24 @@ def lambda_handler(event, context):
             print ("    INFO: Workspaces is not available in",reg)
 
         # Glue
-        try:
-            gluei = boto3.client('glue',region_name=reg)
-            glues = gluei.get_jobs()['Jobs']
-            if len(glues) > 0:
-                csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
-                csv_file.write("%s,%s\n"%('Glue',regname))
-                csv_file.write("%s,%s\n" % ('Name','Description'))
-                csv_file.flush()
-                for glue in glues:
-                    gluename = glue['Name']
-                    gluedesc = glue['Description']
-                    csv_file.write("%s,%s\n" % (workspaceid,gluetate))
+        if PART_OF_ORG == "false":
+            try:
+                gluei = boto3.client('glue',region_name=reg)
+                glues = gluei.get_jobs()['Jobs']
+                if len(glues) > 0:
+                    csv_file.write("%s,%s,%s,%s\n" % ('','','',''))
+                    csv_file.write("%s,%s\n"%('Glue',regname))
+                    csv_file.write("%s,%s\n" % ('Name','Description'))
                     csv_file.flush()
-        except exceptions.EndpointConnectionError:
-            print ("    INFO: Glue is not available in",reg)
+                    for glue in glues:
+                        gluename = glue['Name']
+                        gluedesc = glue['Description']
+                        csv_file.write("%s,%s\n" % (workspaceid,gluetate))
+                        csv_file.flush()
+            except exceptions.EndpointConnectionError:
+                print ("    INFO: Glue is not available in",reg)
+        else:
+            print ("    INFO: Glue is blocked by ORG SCPs")
 
         # Lambda
         try:
