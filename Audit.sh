@@ -66,3 +66,17 @@ do
     done
   fi
 done
+
+# Obtain GuardDuty Status
+echo -e "##########################################################################################" >> AuditResults.csv
+echo -e "GuardDuty Regional Status" >> AuditResults.csv
+echo -e "Region,Status" >> AuditResults.csv
+for region in `aws ec2 describe-regions --output text | cut -f3`
+do
+  active=`aws guardduty list-detectors --output text`
+  if [ "$active" = "" ]; then
+    echo $region',disabled' >> AuditResults.csv
+  else
+    echo $region',enabled' >> AuditResults.csv
+  fi
+done
