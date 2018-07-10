@@ -58,6 +58,9 @@ def lambda_handler(event, context):
     # Give your file path
     filepath ='AWS_Resources_' + date_fmt + '.csv'
     csv_file = open(filepath,'w+')
+    csv_file.write("%s\n" % ('##########################################################################################')) 
+    csv_file.write("%s\n" % ('Global Resources')) 
+    csv_file.write("%s\n" % ('##########################################################################################')) 
 
     # Check if the account is already in the AWS Organization
     orgi = boto3.client('organizations')
@@ -176,12 +179,18 @@ def lambda_handler(event, context):
     else:
         print ("    INFO: Route 53 is blocked by ORG SCPs")
 
+    csv_file.write("%s\n" % ('##########################################################################################')) 
+    csv_file.write("%s\n" % ('Regional Resources'))  
+
     # boto3 library ec2 API describe region page
     # http://boto3.readthedocs.org/en/latest/reference/services/ec2.html#EC2.Client.describe_regions
     regions = ec.describe_regions().get('Regions',[] )
     for region in regions:
         reg=region['RegionName']
         regname='REGION : ' + reg
+        csv_file.write("%s\n" % ('##########################################################################################')) 
+        csv_file.write("%s\n" % (regname)) 
+        csv_file.write("%s\n" % ('##########################################################################################')) 
         print('Scanning Region :', reg)
         # EC2 connection beginning
         ec2con = boto3.client('ec2',region_name=reg)
