@@ -82,7 +82,7 @@ def lambda_handler(event, context):
     else:
         PART_OF_ORG="false"
 
-    print('Scanning Global Ojects : IAM')
+    print('Scanning Global Objects : IAM')
 
     # IAM connection beginning
     iam = boto3.client('iam', region_name="us-east-1")
@@ -124,7 +124,7 @@ def lambda_handler(event, context):
             csv_file.write("%s\n" % (role['RoleName']))
 
     # S3 Objects
-    print('Scanning Global Ojects : S3')
+    print('Scanning Global Objects : S3')
     s3i = boto3.client('s3')
     #http://boto3.readthedocs.io/en/latest/reference/services/s3.html#client
     listbuckets = s3i.list_buckets()
@@ -162,7 +162,7 @@ def lambda_handler(event, context):
 
     # Route53 resources
     if PART_OF_ORG == "false":
-        print('Scanning Global Ojects : Route53')
+        print('Scanning Global Objects : Route53')
         r53i = boto3.client('route53')
         hosted_zones = r53i.list_hosted_zones()['HostedZones']
         if len(hosted_zones) > 0:
